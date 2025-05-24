@@ -1,0 +1,21 @@
+#ifndef __HTTP_REQUEST_H__
+#define __HTTP_REQUEST_H__
+
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <event2/bufferevent.h>
+#include <dirent.h>
+#include "get_file_type.h"
+
+void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev);
+void send_respond(struct bufferevent *bev, char *protocal, int code, char *discription, char *content_type, int length);
+void send_data(struct bufferevent *bev, const char *path, char *protocol);
+void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path, char *protocol);
+void send_error(struct bufferevent *bev, char *protocal, int code, char *discription);
+
+#endif

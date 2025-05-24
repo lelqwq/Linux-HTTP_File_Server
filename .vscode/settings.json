@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "stdio.h": "c",
+        "types.h": "c",
+        "stdlib.h": "c",
+        "ev_call_back_functions.h": "c",
+        "bufferevent.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "enabled"
+}
