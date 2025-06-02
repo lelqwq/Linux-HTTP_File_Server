@@ -105,7 +105,7 @@ void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct soc
 	struct bufferevent *bev = bufferevent_socket_new(evbase, fd, BEV_OPT_CLOSE_ON_FREE);
 	bufferevent_setcb(bev, cb_read_browser, NULL, cb_client_close, (void *)client_addr_copy);
 	// set read timeout
-	struct timeval read_timeout = {READ_TIMEOUT, 0};
+	struct timeval read_timeout = {config.timeout_seconds, 0};
 	bufferevent_set_timeouts(bev, &read_timeout, NULL);
 	// 设置读写上限，防止缓存无限制增长
 	bufferevent_setwatermark(bev, EV_READ, 0, 4096);

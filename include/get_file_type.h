@@ -1,5 +1,5 @@
-#ifndef __GET_FILE_EXTENSION_H__
-#define __GET_FILE_EXTENSION_H__
+#ifndef GET_FILE_EXTENSION_H
+#define GET_FILE_EXTENSION_H
 
 #include <stdio.h>
 #include <string.h>

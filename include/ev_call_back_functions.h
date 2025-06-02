@@ -1,5 +1,5 @@
-#ifndef __EV_CALL_BACK_FUNCTIONS_H__
-#define __EV_CALL_BACK_FUNCTIONS_H__
+#ifndef EV_CALL_BACK_FUNCTIONS_H
+#define EV_CALL_BACK_FUNCTIONS_H
 
 #include <arpa/inet.h>
 #include <sys/stat.h>
@@ -12,8 +12,7 @@
 #include "read_http_line.h"
 #include "http_functions.h"
 #include "url_decode.h"
-
-#define READ_TIMEOUT 10
+#include "server_config.h"
 
 void cb_read_browser(struct bufferevent *bev, void *arg);
 void cb_client_close(struct bufferevent *bev, short events, void *arg);

@@ -2,29 +2,26 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include "ev_call_back_functions.h"
+#include "server_config.h"
 
 struct event_base *evbase;
 struct evconnlistener *ev_listener;
 
 int main(int argc, char *argv[])
 {
-	if (argc < 3)
-	{
-		printf("please enter like this:\n");
-		printf("./server.out ./dir/ 8080\n");
-		return -1;
-	}
-	if (chdir(argv[1]) == -1)
+	// 加载配置文件
+    load_config("server.conf");
+	// 设置当前工作目录
+	if (chdir(config.root_dir) == -1)
 	{
 		perror("chdir error");
 		return -1;
 	}
-	int port = atoi(argv[2]);
 	// sockaddr of server
 	struct sockaddr_in server_addr;
 	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(port);
+	server_addr.sin_port = htons(config.port);
 	// 初始化event_base
 	evbase = event_base_new();
 	// 连接监听器

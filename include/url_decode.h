@@ -1,5 +1,5 @@
-#ifndef __URL_DECODE_H__
-#define __URL_DECODE_H__
+#ifndef URL_DECODE_H
+#define URL_DECODE_H
 
 #include <stdio.h>
 #include <stdlib.h>
