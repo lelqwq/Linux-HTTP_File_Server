@@ -1,6 +1,6 @@
 src_dir=./src
 obj_dir=./obj
-header_dir=./header
+include_dir=./include
 
 src=$(wildcard $(src_dir)/*.c)
 obj=$(patsubst $(src_dir)/%.c, $(obj_dir)/%.o, $(src))
@@ -11,7 +11,7 @@ server.out : ${obj}
 	gcc $^ -o $@ -levent -g 
 
 $(obj_dir)/%.o : $(src_dir)/%.c
-	gcc -c $< -o $@ -I ${header_dir} -g 
+	gcc -c $< -o $@ -I ${include_dir} -g 
 
 .PHONY: clean
 

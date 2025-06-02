@@ -1,40 +1,41 @@
 #include "http_functions.h"
 
-void send_respond(struct bufferevent *bev, char *protocol, int code, char *description, char *content_type, int length)
+void send_head(struct bufferevent *bev, char *protocol, int code, char *description, char *content_type, int length)
 {
-	char respond[1024] = {0};
-	sprintf(respond,
-			"%s %d %s\r\n"
-			"%s\r\n"
-			"Content-Length: %d\r\n"
-			"\r\n",
-			protocol, code, description, content_type, length);
-	bufferevent_write(bev, respond, strlen(respond));
+	struct evbuffer *output = bufferevent_get_output(bev);
+    if (!output) return;
+
+    evbuffer_add_printf(output, "%s %d %s\r\n", protocol, code, description);
+    evbuffer_add_printf(output, "%s\r\n", content_type);
+    evbuffer_add_printf(output, "Content-Length: %d\r\n", length);
+    evbuffer_add(output, "\r\n", 2);
 }
 
-void send_data(struct bufferevent *bev, const char *path, char *protocol)
+void send_file(struct bufferevent *bev, const char *path, char *protocol)
 {
 	int fd = open(path, O_RDONLY);
 	if (fd == -1)
 	{
-		perror("send_data open error");
+		perror("open error");
 		send_error(bev, protocol, 500, "Internal Server Error");
 		return;
 	}
-	int n = 0;
-	char buffer[1024] = {0};
-	while ((n = read(fd, buffer, sizeof(buffer))) > 0)
+	struct stat st;
+	if (fstat(fd, &st) == -1)
 	{
-		int ret = bufferevent_write(bev, buffer, n);
-		if (ret == -1)
-		{
-			perror("bufferevent_write error");
-			send_error(bev, protocol, 500, "Internal Server Error");
-			close(fd);
-			return;
-		}
+		perror("fstat error");
+		close(fd);
+		send_error(bev, protocol, 500, "Internal Server Error");
+		return;
 	}
-	close(fd);
+	struct evbuffer *output = bufferevent_get_output(bev);
+	if (evbuffer_add_file(output, fd, 0, st.st_size) == -1)
+	{
+		perror("evbuffer_add_file error");
+		close(fd);
+		send_error(bev, protocol, 500, "Internal Server Error");
+		return;
+	}
 }
 
 void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path, char *protocol)
@@ -127,30 +128,35 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 
 void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev)
 {
-	struct stat path_stat;
-	int ret = stat(fs_path, &path_stat);
-	if (ret == 0) // path exists
+	if (strcasecmp(method, "GET") != 0)
 	{
-		if (S_ISREG(path_stat.st_mode)) // normal file
-		{
-			// send HTTP head info
-			char *file_type = get_file_type(fs_path);
-			send_respond(bev, protocol, 200, "OK", file_type, path_stat.st_size);
-			// send file
-			send_data(bev, fs_path, protocol);
-		}
-		else if (S_ISDIR(path_stat.st_mode)) // dir
-		{
-			// send HTTP head info
-			send_respond(bev, protocol, 200, "OK", "Content-Type: text/html; charset=UTF-8", -1);
-			// send dir data
-			send_dir(bev, fs_path, url_path, protocol);
-		}
-	}
-	else // path not exists
-	{
-		send_error(bev, protocol, 404, "Path does not exists");
+		send_error(bev, protocol, 405, "Method Not Allowed");
 		return;
+	}
+	struct stat st;
+	if (stat(fs_path, &st) == -1)
+	{
+		send_error(bev, protocol, 404, "Not Found");
+		return;
+	}
+	if (S_ISREG(st.st_mode))
+	{
+		// send HTTP head info
+		char *file_type = get_file_type(fs_path);
+		send_head(bev, protocol, 200, "OK", file_type, st.st_size);
+		// send file
+		send_file(bev, fs_path, protocol);
+	}
+	else if (S_ISDIR(st.st_mode))
+	{
+		// send HTTP head info
+		send_head(bev, protocol, 200, "OK", "Content-Type: text/html; charset=UTF-8", -1);
+		// send dir data
+		send_dir(bev, fs_path, url_path, protocol);
+	}
+	else
+	{
+		send_error(bev, protocol, 403, "Forbidden");
 	}
 }
 

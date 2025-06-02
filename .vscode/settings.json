@@ -4,7 +4,9 @@
         "types.h": "c",
         "stdlib.h": "c",
         "ev_call_back_functions.h": "c",
-        "bufferevent.h": "c"
+        "bufferevent.h": "c",
+        "http_functions.h": "c"
     },
-    "C_Cpp.errorSquiggles": "enabled"
+    "C_Cpp.errorSquiggles": "enabled",
+    "makefile.configureOnOpen": true
 }

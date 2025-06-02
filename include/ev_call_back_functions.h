@@ -13,6 +13,8 @@
 #include "http_functions.h"
 #include "url_decode.h"
 
+#define READ_TIMEOUT 10
+
 void cb_read_browser(struct bufferevent *bev, void *arg);
 void cb_client_close(struct bufferevent *bev, short events, void *arg);
 void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *arg);
