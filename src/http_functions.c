@@ -3,12 +3,13 @@
 void send_head(struct bufferevent *bev, char *protocol, int code, char *description, char *content_type, int length)
 {
 	struct evbuffer *output = bufferevent_get_output(bev);
-    if (!output) return;
+	if (!output)
+		return;
 
-    evbuffer_add_printf(output, "%s %d %s\r\n", protocol, code, description);
-    evbuffer_add_printf(output, "%s\r\n", content_type);
-    evbuffer_add_printf(output, "Content-Length: %d\r\n", length);
-    evbuffer_add(output, "\r\n", 2);
+	evbuffer_add_printf(output, "%s %d %s\r\n", protocol, code, description);
+	evbuffer_add_printf(output, "%s\r\n", content_type);
+	evbuffer_add_printf(output, "Content-Length: %d\r\n", length);
+	evbuffer_add(output, "\r\n", 2);
 }
 
 void send_file(struct bufferevent *bev, const char *path, char *protocol)
@@ -17,7 +18,7 @@ void send_file(struct bufferevent *bev, const char *path, char *protocol)
 	if (fd == -1)
 	{
 		perror("open error");
-		send_error(bev, protocol, 500, "Internal Server Error");
+		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
 	struct stat st;
@@ -25,7 +26,7 @@ void send_file(struct bufferevent *bev, const char *path, char *protocol)
 	{
 		perror("fstat error");
 		close(fd);
-		send_error(bev, protocol, 500, "Internal Server Error");
+		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
 	struct evbuffer *output = bufferevent_get_output(bev);
@@ -33,7 +34,7 @@ void send_file(struct bufferevent *bev, const char *path, char *protocol)
 	{
 		perror("evbuffer_add_file error");
 		close(fd);
-		send_error(bev, protocol, 500, "Internal Server Error");
+		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
 }
@@ -41,148 +42,131 @@ void send_file(struct bufferevent *bev, const char *path, char *protocol)
 void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path, char *protocol)
 {
 	DIR *dp = opendir(fs_path);
-	if (dp == NULL)
+	if (!dp)
 	{
 		perror("opendir error");
-		send_error(bev, protocol, 500, "Internal Server Error");
+		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
-
-	char html_content[4096] = {0};
-	size_t html_len = 0;
-	// 表头
-	int n = snprintf(html_content + html_len, sizeof(html_content) - html_len,
-					 "<html><head><title>Index of %s</title></head>\n"
-					 "<body bgcolor=\"#ffffff\">\n"
-					 "<h1>Index of %s</h1><hr>\n"
-					 "<table>\n"
-					 "<tr><th>Type</th><th>Name</th><th>Size</th><th>Modified</th></tr>\n",
-					 fs_path, fs_path);
-	if (n < 0 || (size_t)n >= sizeof(html_content) - html_len)
+	struct evbuffer *out = bufferevent_get_output(bev);
+	if (!out)
 	{
 		closedir(dp);
-		send_error(bev, protocol, 500, "Internal Server Error");
 		return;
 	}
-	html_len += n;
+	// HTML 开头
+	evbuffer_add_printf(out,
+						"<html><head><title>Index of %s</title></head>"
+						"<body bgcolor=\"#ffffff\">"
+						"<h1>Index of %s</h1><hr><table>"
+						"<tr><th>Type</th><th>Name</th><th>Size</th><th>Modified</th></tr>",
+						fs_path, fs_path);
 
 	struct dirent *entry;
 	while ((entry = readdir(dp)) != NULL)
 	{
-		// 处理文件类型
-		struct stat file_stat;
+		// 生成计算机完整路径
 		char full_path[1024];
 		snprintf(full_path, sizeof(full_path), "%s/%s", fs_path, entry->d_name);
-		if (stat(full_path, &file_stat) == -1)
+
+		struct stat st;
+		if (stat(full_path, &st) == -1)
 		{
 			perror("stat error");
 			continue;
 		}
-		char type_flag = '?';
-		if (S_ISDIR(file_stat.st_mode))
-			type_flag = 'D';
-		else if (S_ISREG(file_stat.st_mode))
-			type_flag = '-';
-		// 处理修改时间
-		char modified_time[26];
-		strncpy(modified_time, ctime(&file_stat.st_mtime), sizeof(modified_time) - 1);
-		modified_time[sizeof(modified_time) - 1] = '\0';
-		modified_time[strcspn(modified_time, "\n")] = 0;
-		// 超链接处理
-		char href_path[1024];
-		snprintf(href_path, sizeof(href_path), "%s/%s", url_path, entry->d_name);
-		char cleaned_href[1024] = {0};
+		// 判断文件类型
+		char type_flag = S_ISDIR(st.st_mode) ? 'D' : S_ISREG(st.st_mode) ? '-'
+																		 : '?';
+		// 获取修改时间
+		char modified_time[64];
+		struct tm *mt = localtime(&st.st_mtime);
+		strftime(modified_time, sizeof(modified_time), "%Y-%m-%d %H:%M:%S", mt);
+		// 生成 href 链接
+		// 注意：这里的 url_path 应该是相对于服务器根目录的路径
+		char href[1024];
+		snprintf(href, sizeof(href), "%s/%s", url_path, entry->d_name);
+		// 规范化路径（去除重复 /）
+		char clean_href[1024];
 		int j = 0;
-		for (int i = 0; href_path[i] != '\0' && j < (int)sizeof(cleaned_href) - 1; i++)
+		for (int i = 0; href[i] && j < sizeof(clean_href) - 1; ++i)
 		{
-			if (href_path[i] == '/' && href_path[i + 1] == '/')
+			if (href[i] == '/' && href[i + 1] == '/')
 				continue;
-			cleaned_href[j++] = href_path[i];
+			clean_href[j++] = href[i];
 		}
-		cleaned_href[j] = '\0';
-		// 拼接一行，先计算剩余空间
-		size_t remain = sizeof(html_content) - html_len;
-		if (remain < 64) // 剩余空间太小，直接跳出
-			break;
-		n = snprintf(html_content + html_len, remain,
-					 "<tr><td>%c</td><td><a href=\"%s\">%s</a></td><td>%lld</td><td>%s</td></tr>\n",
-					 type_flag, cleaned_href, entry->d_name, (long long)file_stat.st_size, modified_time);
-		if (n < 0 || (size_t)n >= remain) // 空间不足，提前结束
-			break;
-		html_len += n;
+		clean_href[j] = '\0';
+
+		evbuffer_add_printf(out,
+							"<tr><td>%c</td><td><a href=\"%s\">%s</a></td>"
+							"<td>%lld</td><td>%s</td></tr>",
+							type_flag, clean_href, entry->d_name,
+							(long long)st.st_size, modified_time);
 	}
-	// 结尾
-	size_t remain = sizeof(html_content) - html_len;
-	n = snprintf(html_content + html_len, remain, "</table><hr></body></html>");
-	if (n > 0 && (size_t)n < remain)
-		html_len += n;
-	else
-		html_content[sizeof(html_content) - 1] = '\0';
+	evbuffer_add(out, "</table><hr></body></html>", strlen("</table><hr></body></html>"));
 	closedir(dp);
-	if (bufferevent_write(bev, html_content, strlen(html_content)) == -1)
-	{
-		perror("bufferevent_write error in send_dir");
-		send_error(bev, protocol, 500, "Internal Server Error");
-	}
 }
 
 void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev)
 {
 	if (strcasecmp(method, "GET") != 0)
 	{
-		send_error(bev, protocol, 405, "Method Not Allowed");
+		send_error(bev, protocol, HTTP_METHOD_NOT_ALLOWED, "Method Not Allowed");
 		return;
 	}
 	struct stat st;
 	if (stat(fs_path, &st) == -1)
 	{
-		send_error(bev, protocol, 404, "Not Found");
+		send_error(bev, protocol, HTTP_NOT_FOUND, "Not Found");
 		return;
 	}
-	if (S_ISREG(st.st_mode))
+	if (S_ISREG(st.st_mode)) // 文件
 	{
 		// send HTTP head info
 		char *file_type = get_file_type(fs_path);
-		send_head(bev, protocol, 200, "OK", file_type, st.st_size);
+		send_head(bev, protocol, HTTP_OK, "OK", file_type, st.st_size);
 		// send file
 		send_file(bev, fs_path, protocol);
 	}
-	else if (S_ISDIR(st.st_mode))
+	else if (S_ISDIR(st.st_mode)) // 文件夹
 	{
 		// send HTTP head info
-		send_head(bev, protocol, 200, "OK", "Content-Type: text/html; charset=UTF-8", -1);
+		send_head(bev, protocol, HTTP_OK, "OK", "Content-Type: text/html; charset=UTF-8", -1);
 		// send dir data
 		send_dir(bev, fs_path, url_path, protocol);
 	}
 	else
 	{
-		send_error(bev, protocol, 403, "Forbidden");
+		send_error(bev, protocol, HTTP_FORBIDDEN, "Forbidden");
 	}
 }
 
 void send_error(struct bufferevent *bev, char *protocol, int code, char *description)
 {
-	char respond[4096] = {0};
-	char html_content[1024] = {0};
+	if (!bev)
+		return;
+	struct evbuffer *output = bufferevent_get_output(bev);
+	if (!output)
+		return;
 
-	sprintf(html_content,
-			"<html><head><title>%d %s</title></head>\n"
-			"<body bgcolor=\"#cc99cc\"><h4 align=\"center\">%d %s</h4>\n"
-			"%s\n"
-			"<hr>\n"
-			"</body>\n"
-			"</html>\n",
-			code, description, code, description, "Error occurred");
+	// 生成 HTML 错误页面内容
+	char html[1024];
+	int html_len = snprintf(html, sizeof(html),
+							"<html><head><title>%d %s</title></head>"
+							"<body bgcolor=\"#cc99cc\"><h4 align=\"center\">%d %s</h4>"
+							"Error occurred<hr></body></html>",
+							code, description, code, description);
+	if (html_len < 0 || html_len >= (int)sizeof(html))
+		return;
 
-	int content_length = strlen(html_content);
+	// 写 HTTP 响应头
+	evbuffer_add_printf(output,
+						"%s %d %s\r\n"
+						"Content-Type: text/html; charset=UTF-8\r\n"
+						"Content-Length: %d\r\n"
+						"Connection: close\r\n\r\n",
+						protocol, code, description, html_len);
 
-	sprintf(respond,
-			"%s %d %s\r\n"
-			"Content-Type: text/html\r\n"
-			"Content-Length: %d\r\n"
-			"Connection: close\r\n\r\n",
-			protocol, code, description, content_length);
-
-	strcat(respond, html_content);
-	bufferevent_write(bev, respond, strlen(respond));
+	// 写 HTML 内容
+	evbuffer_add(output, html, html_len);
 }
