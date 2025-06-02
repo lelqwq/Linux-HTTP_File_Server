@@ -1,5 +1,5 @@
-#ifndef __HTTP_REQUEST_H__
-#define __HTTP_REQUEST_H__
+#ifndef HTTP_REQUEST_H
+#define HTTP_REQUEST_H
 
 #include <event2/buffer.h>
 #include <sys/types.h>

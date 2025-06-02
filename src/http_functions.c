@@ -63,13 +63,53 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 						fs_path, fs_path);
 
 	struct dirent *entry;
+	char full_path[1024];
+	struct stat st;
+	char modified_time[64];
+	char href[1024];
+	char clean_href[1024];
+	// 优先处理 "." 和 ".."
+	const char *special_entries[] = {".", ".."};
+	for (int i = 0; i < 2; ++i)
+	{
+		// 根目录不显示 ".."
+		if(strcmp(url_path, "/") == 0 && strcmp(special_entries[i], "..") == 0)
+			continue; 
+		// 生成完整主机路径
+		snprintf(full_path, sizeof(full_path), "%s/%s", fs_path, special_entries[i]);
+		if (stat(full_path, &st) == -1)
+			continue;
+		// 获取修改时间
+		struct tm *mt = localtime(&st.st_mtime);
+		strftime(modified_time, sizeof(modified_time), "%Y-%m-%d %H:%M:%S", mt);
+		// 生成 href 链接
+		snprintf(href, sizeof(href), "%s/%s", url_path, special_entries[i]);
+		int j = 0;
+		for (int k = 0; href[k] && j < sizeof(clean_href) - 1; ++k)
+		{
+			if (href[k] == '/' && href[k + 1] == '/')
+				continue;
+			clean_href[j++] = href[k];
+		}
+		clean_href[j] = '\0';
+		evbuffer_add_printf(out,
+							"<tr><td>D</td><td><a href=\"%s\">%s</a></td>"
+							"<td>%lld</td><td>%s</td></tr>",
+							clean_href, special_entries[i],
+							(long long)st.st_size, modified_time);
+	}
+	// 处理其他目录项
 	while ((entry = readdir(dp)) != NULL)
 	{
-		// 生成计算机完整路径
-		char full_path[1024];
+		// 跳过当前目录和上级目录
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		// 生成完整主机路径，这里的 fs_path 应该是主机文件系统的路径
+		/*
+		待添加功能
+		若路径长度过长要进行处理
+		*/
 		snprintf(full_path, sizeof(full_path), "%s/%s", fs_path, entry->d_name);
-
-		struct stat st;
 		if (stat(full_path, &st) == -1)
 		{
 			perror("stat error");
@@ -79,15 +119,11 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 		char type_flag = S_ISDIR(st.st_mode) ? 'D' : S_ISREG(st.st_mode) ? '-'
 																		 : '?';
 		// 获取修改时间
-		char modified_time[64];
 		struct tm *mt = localtime(&st.st_mtime);
 		strftime(modified_time, sizeof(modified_time), "%Y-%m-%d %H:%M:%S", mt);
-		// 生成 href 链接
-		// 注意：这里的 url_path 应该是相对于服务器根目录的路径
-		char href[1024];
+		// 生成 href 链接，这里的 url_path 应该是相对于服务器根目录的路径
 		snprintf(href, sizeof(href), "%s/%s", url_path, entry->d_name);
 		// 规范化路径（去除重复 /）
-		char clean_href[1024];
 		int j = 0;
 		for (int i = 0; href[i] && j < sizeof(clean_href) - 1; ++i)
 		{

@@ -1,5 +1,5 @@
-#ifndef __HTTP_ERROR_H__
-#define __HTTP_ERROR_H__
+#ifndef HTTP_ERROR_H
+#define HTTP_ERROR_H
 
 enum http_status_code
 {

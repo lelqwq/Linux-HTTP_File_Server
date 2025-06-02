@@ -1,5 +1,5 @@
-#ifndef __READ_HTTP_H__
-#define __READ_HTTP_H__
+#ifndef READ_HTTP_H
+#define READ_HTTP_H
 
 #include <stdio.h>
 #include <string.h>
