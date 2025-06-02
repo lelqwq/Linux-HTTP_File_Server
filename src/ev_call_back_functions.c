@@ -74,12 +74,20 @@ void cb_client_close(struct bufferevent *bev, short events, void *arg)
 	struct sockaddr_in *client_addr = (struct sockaddr_in *)arg;
 	char ip[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &client_addr->sin_addr, ip, sizeof(ip));
-	if (BEV_EVENT_EOF & events)
+	if (events & BEV_EVENT_EOF)
 	{
-		printf("Connection %s:%d closed.\n", ip, ntohs(client_addr->sin_port));
-		free(client_addr);
-		bufferevent_free(bev);
+		printf("Connection %s:%d closed by peer.\n", ip, ntohs(client_addr->sin_port));
 	}
+	else if (events & BEV_EVENT_ERROR)
+	{
+		printf("Connection %s:%d error: %s\n", ip, ntohs(client_addr->sin_port), strerror(errno));
+	}
+	else if (events & BEV_EVENT_TIMEOUT)
+	{
+		printf("Connection %s:%d timeout.\n", ip, ntohs(client_addr->sin_port));
+	}
+	free(client_addr);
+	bufferevent_free(bev);
 }
 
 void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *arg)
@@ -96,5 +104,11 @@ void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct soc
 	// new client bufferevent
 	struct bufferevent *bev = bufferevent_socket_new(evbase, fd, BEV_OPT_CLOSE_ON_FREE);
 	bufferevent_setcb(bev, cb_read_browser, NULL, cb_client_close, (void *)client_addr_copy);
+	// set read timeout
+	struct timeval read_timeout = {READ_TIMEOUT, 0};
+	bufferevent_set_timeouts(bev, &read_timeout, NULL);
+	// 设置读写上限，防止缓存无限制增长
+	bufferevent_setwatermark(bev, EV_READ, 0, 4096);
+	// enable read event
 	bufferevent_enable(bev, EV_READ);
 }
