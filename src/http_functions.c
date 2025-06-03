@@ -37,6 +37,8 @@ void send_file(struct bufferevent *bev, const char *path, char *protocol)
 		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
+	// 增加发送字节数
+    atomic_fetch_add(&stats.total_bytes_sent, st.st_size);
 }
 
 void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path, char *protocol)
