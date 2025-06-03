@@ -12,7 +12,7 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 		printf("no http\n");
 		return;
 	}
-	printf("%s\n", http_line);
+	//printf("%s\n", http_line);
 	// clear the rest of bufferevent readbuffer
 	while (1)
 	{
@@ -40,8 +40,8 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 		// 解码 URL，生成文件系统路径
 		char decoded_path[256];
 		url_decode(decoded_path, temp_path + 1); // 去掉开头的 /
-		strcpy(path, decoded_path);              // 本地访问路径
-		strcpy(url_path, temp_path);             // 原始 URL 路径
+		strcpy(path, decoded_path);				 // 本地访问路径
+		strcpy(url_path, temp_path);			 // 原始 URL 路径
 	}
 	// 简单防御路径穿越攻击
 	char real_path[1024];
@@ -65,6 +65,8 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 	// adjust what kind of request(as though this server was designed for only GET request)
 	if (strcmp(method, "GET") == 0) // GET request
 	{
+		// 增加总请求数
+		atomic_fetch_add(&stats.total_requests, 1);
 		http_request(method, path, url_path, protocol, bev);
 	}
 }
@@ -76,18 +78,25 @@ void cb_client_close(struct bufferevent *bev, short events, void *arg)
 	inet_ntop(AF_INET, &client_addr->sin_addr, ip, sizeof(ip));
 	if (events & BEV_EVENT_EOF)
 	{
-		printf("Connection %s:%d closed by peer.\n", ip, ntohs(client_addr->sin_port));
+		if (config.enable_connection_info)
+			printf("Connection %s:%d closed by peer.\n", ip, ntohs(client_addr->sin_port));
 	}
 	else if (events & BEV_EVENT_ERROR)
 	{
-		printf("Connection %s:%d error: %s\n", ip, ntohs(client_addr->sin_port), strerror(errno));
+		// 增加错误计数
+		atomic_fetch_add(&stats.total_errors, 1);
+		if (config.enable_connection_info)
+			printf("Connection %s:%d error: %s\n", ip, ntohs(client_addr->sin_port), strerror(errno));
 	}
 	else if (events & BEV_EVENT_TIMEOUT)
 	{
-		printf("Connection %s:%d timeout.\n", ip, ntohs(client_addr->sin_port));
+		if (config.enable_connection_info)
+			printf("Connection %s:%d timeout.\n", ip, ntohs(client_addr->sin_port));
 	}
 	free(client_addr);
 	bufferevent_free(bev);
+	// 减少当前连接数
+	atomic_fetch_sub(&stats.current_connections, 1);
 }
 
 void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *arg)
@@ -97,7 +106,10 @@ void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct soc
 	struct sockaddr_in *client_addr = (struct sockaddr_in *)sa;
 	char ip[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &client_addr->sin_addr, ip, sizeof(ip));
-	printf("New connection from %s:%d\n", ip, ntohs(client_addr->sin_port));
+	if (config.enable_connection_info)
+	{
+		printf("New connection from %s:%d\n", ip, ntohs(client_addr->sin_port));
+	}
 	// copy client_addr for call_back function
 	struct sockaddr_in *client_addr_copy = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
 	memcpy(client_addr_copy, client_addr, sizeof(struct sockaddr_in));
@@ -111,4 +123,6 @@ void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct soc
 	bufferevent_setwatermark(bev, EV_READ, 0, 4096);
 	// enable read event
 	bufferevent_enable(bev, EV_READ);
+	// 增加当前连接数
+	atomic_fetch_add(&stats.current_connections, 1);
 }

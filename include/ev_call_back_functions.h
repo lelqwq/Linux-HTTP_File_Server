@@ -13,6 +13,7 @@
 #include "http_functions.h"
 #include "url_decode.h"
 #include "server_config.h"
+#include "server_stats.h"
 
 void cb_read_browser(struct bufferevent *bev, void *arg);
 void cb_client_close(struct bufferevent *bev, short events, void *arg);

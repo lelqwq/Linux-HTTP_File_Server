@@ -13,6 +13,7 @@
 #include <dirent.h>
 #include "get_file_type.h"
 #include "http_error.h"
+#include "server_stats.h"
 
 void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev);
 void send_head(struct bufferevent *bev, char *protocal, int code, char *discription, char *content_type, int length);
