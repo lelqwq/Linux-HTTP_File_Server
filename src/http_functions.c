@@ -1,18 +1,36 @@
 #include "http_functions.h"
 
-void send_head(struct bufferevent *bev, char *protocol, int code, char *description, char *content_type, int length)
+void send_head(struct bufferevent *bev, char *protocol, int code, char *description, char *content_type, int length, off_t start, off_t end, off_t total_size)
 {
 	struct evbuffer *output = bufferevent_get_output(bev);
 	if (!output)
 		return;
-
 	evbuffer_add_printf(output, "%s %d %s\r\n", protocol, code, description);
-	evbuffer_add_printf(output, "%s\r\n", content_type);
-	evbuffer_add_printf(output, "Content-Length: %d\r\n", length);
+	evbuffer_add_printf(output, "Content-Type: %s\r\n", content_type);
+	// 对视频文件总是添加Accept-Ranges
+	if (strncmp(content_type, "video/", 6) == 0)
+	{
+		evbuffer_add_printf(output, "Accept-Ranges: bytes\r\n");
+		// 为视频文件添加 Content-Disposition: inline
+		evbuffer_add_printf(output, "Content-Disposition: inline\r\n");
+		// 添加缓存控制头，优化视频播放体验
+		evbuffer_add_printf(output, "Cache-Control: public, max-age=3600\r\n");
+	}
+	// 如果是范围请求响应，添加Content-Range头
+	if (code == 206)
+	{
+		evbuffer_add_printf(output, "Content-Range: bytes %lld-%lld/%lld\r\n", (long long)start, (long long)end, (long long)total_size);
+	}
+	// 如果 length 为负，不输出 Content-Length 头
+    if (length >= 0)
+    {
+        evbuffer_add_printf(output, "Content-Length: %d\r\n", length);
+    }
+	evbuffer_add_printf(output, "Connection: close\r\n");
 	evbuffer_add(output, "\r\n", 2);
 }
 
-void send_file(struct bufferevent *bev, const char *path, char *protocol)
+void send_file_range(struct bufferevent *bev, const char *path, off_t offset, size_t length, const char *protocol)
 {
 	int fd = open(path, O_RDONLY);
 	if (fd == -1)
@@ -29,16 +47,25 @@ void send_file(struct bufferevent *bev, const char *path, char *protocol)
 		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
+	// 检查范围合法性
+	if (offset < 0 || offset >= st.st_size || offset + length > st.st_size)
+	{
+		fprintf(stderr, "Invalid range offset/length\n");
+		close(fd);
+		send_error(bev, protocol, 416, "Requested Range Not Satisfiable");
+		return;
+	}
 	struct evbuffer *output = bufferevent_get_output(bev);
-	if (evbuffer_add_file(output, fd, 0, st.st_size) == -1)
+	if (evbuffer_add_file(output, fd, offset, length) == -1)
 	{
 		perror("evbuffer_add_file error");
 		close(fd);
 		send_error(bev, protocol, HTTP_INTERNAL_ERROR, "Internal Server Error");
 		return;
 	}
-	// 增加发送字节数
-    atomic_fetch_add(&stats.total_bytes_sent, st.st_size);
+	// fd 由 libevent 接管，会在发送完成后自动关闭，无需调用 close(fd)
+	// 更新统计
+	atomic_fetch_add(&stats.total_bytes_sent, length);
 }
 
 void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path, char *protocol)
@@ -75,8 +102,8 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 	for (int i = 0; i < 2; ++i)
 	{
 		// 根目录不显示 ".."
-		if(strcmp(url_path, "/") == 0 && strcmp(special_entries[i], "..") == 0)
-			continue; 
+		if (strcmp(url_path, "/") == 0 && strcmp(special_entries[i], "..") == 0)
+			continue;
 		// 生成完整主机路径
 		snprintf(full_path, sizeof(full_path), "%s/%s", fs_path, special_entries[i]);
 		if (stat(full_path, &st) == -1)
@@ -106,6 +133,12 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 		// 跳过当前目录和上级目录
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 			continue;
+		// 隐藏 mp4 文件
+        {
+            const char *ext = strrchr(entry->d_name, '.');
+            if (ext && strcasecmp(ext, ".mp4") == 0)
+                continue;
+        }
 		// 生成完整主机路径，这里的 fs_path 应该是主机文件系统的路径
 		/*
 		待添加功能
@@ -145,7 +178,7 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 	closedir(dp);
 }
 
-void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev)
+void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev, http_request_t *req)
 {
 	if (strcasecmp(method, "GET") != 0)
 	{
@@ -160,16 +193,51 @@ void http_request(char *method, const char *fs_path, const char *url_path, char 
 	}
 	if (S_ISREG(st.st_mode)) // 文件
 	{
-		// send HTTP head info
 		char *file_type = get_file_type(fs_path);
-		send_head(bev, protocol, HTTP_OK, "OK", file_type, st.st_size);
-		// send file
-		send_file(bev, fs_path, protocol);
+		const char *range_header = get_header_value(req, "Range");
+		off_t start = 0;
+		off_t end = st.st_size - 1;
+		int is_range = 0;
+		// 处理Range请求
+		if (range_header && strncmp(range_header, "bytes=", 6) == 0)
+		{
+			is_range = 1;
+			// 用临时变量拷贝字符串，避免破坏原始请求头
+			char range_copy[128];
+			strncpy(range_copy, range_header + 6, sizeof(range_copy) - 1);
+			range_copy[sizeof(range_copy) - 1] = '\0';
+			char *dash = strchr(range_copy, '-');
+			if (dash)
+			{
+				*dash = '\0';
+				if (strlen(range_copy) > 0)
+					start = atoll(range_copy);
+				if (strlen(dash + 1) > 0)
+					end = atoll(dash + 1);
+				// 验证范围有效性
+				if (start > end || start >= st.st_size)
+				{
+					send_error(bev, protocol, 416, "Requested Range Not Satisfiable");
+					return;
+				}
+				// 确保end不超过文件大小
+				if (end >= st.st_size)
+					end = st.st_size - 1;
+			}
+		}
+		int content_length = end - start + 1;
+		// 发送适当的响应头
+		if (is_range)
+			send_head(bev, protocol, 206, "Partial Content", file_type, content_length, start, end, st.st_size);
+		else
+			send_head(bev, protocol, HTTP_OK, "OK", file_type, st.st_size, 0, st.st_size - 1, st.st_size);
+		// 发送文件内容
+		send_file_range(bev, fs_path, start, content_length, protocol);
 	}
 	else if (S_ISDIR(st.st_mode)) // 文件夹
 	{
 		// send HTTP head info
-		send_head(bev, protocol, HTTP_OK, "OK", "Content-Type: text/html; charset=UTF-8", -1);
+		send_head(bev, protocol, HTTP_OK, "OK", "text/html; charset=UTF-8", -1, 0, 0, 0);
 		// send dir data
 		send_dir(bev, fs_path, url_path, protocol);
 	}
@@ -179,7 +247,7 @@ void http_request(char *method, const char *fs_path, const char *url_path, char 
 	}
 }
 
-void send_error(struct bufferevent *bev, char *protocol, int code, char *description)
+void send_error(struct bufferevent *bev, const char *protocol, int code, char *description)
 {
 	if (!bev)
 		return;
@@ -207,4 +275,51 @@ void send_error(struct bufferevent *bev, char *protocol, int code, char *descrip
 
 	// 写 HTML 内容
 	evbuffer_add(output, html, html_len);
+}
+
+void parse_http_headers(struct bufferevent *bev, http_request_t *req)
+{
+	req->header_count = 0;
+	while (1)
+	{
+		char temp[1024] = {0};
+		int ret = read_http_line(bev, temp, sizeof(temp));
+		if (ret == -1 || strcmp(temp, "\r\n") == 0 || strlen(temp) == 0)
+			break;
+		// 解析 key:value（防止超过最大数量）
+		if (req->header_count < MAX_HEADERS)
+		{
+			char *colon = strchr(temp, ':');
+			if (colon)
+			{
+				int name_len = colon - temp;
+				if (name_len < MAX_HEADER_NAME_LEN)
+				{
+					strncpy(req->headers[req->header_count].name, temp, name_len);
+					req->headers[req->header_count].name[name_len] = '\0';
+					// 跳过冒号和空格
+					char *value = colon + 1;
+					while (*value == ' ')
+						value++;
+					strncpy(req->headers[req->header_count].value, value, MAX_HEADER_VALUE_LEN - 1);
+					req->headers[req->header_count].value[MAX_HEADER_VALUE_LEN - 1] = '\0';
+					// 去除末尾的 \r\n
+					char *end = strchr(req->headers[req->header_count].value, '\r');
+					if (end)
+						*end = '\0';
+					req->header_count++;
+				}
+			}
+		}
+	}
+}
+
+const char *get_header_value(http_request_t *req, const char *key)
+{
+	for (int i = 0; i < req->header_count; i++)
+	{
+		if (strcasecmp(req->headers[i].name, key) == 0)
+			return req->headers[i].value;
+	}
+	return NULL;
 }
