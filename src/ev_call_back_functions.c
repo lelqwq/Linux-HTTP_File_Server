@@ -30,7 +30,7 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 		strcpy(path, "video/video_player.html"); // 视频模板页面的实际路径
 		strcpy(url_path, temp_path);
 		// 解析视频路径参数
-		query++; // 跳过 '?'
+		query++; // 跳过 '?'`
 		if (strncmp(query, "video=", 6) == 0)
 		{
 			char *video_param = query + 6;
