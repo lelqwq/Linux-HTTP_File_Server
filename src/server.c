@@ -5,6 +5,7 @@
 #include "server_config.h"
 #include "server_stats.h"
 #include <linux/limits.h>
+#include <signal.h>
 
 struct event_base *evbase;
 struct evconnlistener *ev_listener;
@@ -16,6 +17,7 @@ void stats_timer_cb(evutil_socket_t fd, short what, void *arg)
 
 int main(int argc, char *argv[])
 {
+	signal(SIGPIPE, SIG_IGN); // 忽略 SIGPIPE 信号
 	// 获取当前工作目录
 	char cwd[PATH_MAX];
 	if (getcwd(cwd, sizeof(cwd)) == NULL)

@@ -12,18 +12,6 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 		printf("no http\n");
 		return;
 	}
-	//printf("%s\n", http_line);
-	// clear the rest of bufferevent readbuffer
-	while (1)
-	{
-		char temp[1024] = {0};
-		int ret = read_http_line(bev, temp, sizeof(temp));
-		// printf("%s\n",temp);
-		if (ret == -1)
-		{
-			break;
-		}
-	}
 	// split the first HTTP line
 	char method[16], temp_path[256], protocol[16];
 	sscanf(http_line, "%15s %255s %15s", method, temp_path, protocol);
@@ -62,12 +50,15 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 		send_error(bev, protocol, 403, "Forbidden");
 		return;
 	}
+	// 解析 HTTP 请求头
+	http_request_t req;
+	parse_http_headers(bev, &req);
 	// adjust what kind of request(as though this server was designed for only GET request)
 	if (strcmp(method, "GET") == 0) // GET request
 	{
 		// 增加总请求数
 		atomic_fetch_add(&stats.total_requests, 1);
-		http_request(method, path, url_path, protocol, bev);
+		http_request(method, path, url_path, protocol, bev, &req);
 	}
 }
 
@@ -106,7 +97,7 @@ void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct soc
 	struct sockaddr_in *client_addr = (struct sockaddr_in *)sa;
 	char ip[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &client_addr->sin_addr, ip, sizeof(ip));
-	if (config.enable_connection_info)
+	if (config.enable_connection_info!= 0)
 	{
 		printf("New connection from %s:%d\n", ip, ntohs(client_addr->sin_port));
 	}
