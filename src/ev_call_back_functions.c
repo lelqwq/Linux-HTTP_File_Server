@@ -16,9 +16,28 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 	char method[16], temp_path[256], protocol[16];
 	sscanf(http_line, "%15s %255s %15s", method, temp_path, protocol);
 
+	// 去除查询参数，例如处理 video_template.html?video=...
+	char *query = strchr(temp_path, '?');
+	if (query)
+		*query = '\0';
+
 	char path[256];
 	char url_path[256];
-	if (strcmp(temp_path, "/") == 0)
+	char video_path[256] = {0}; // 存储视频路径参数
+	// 检查是否是视频模板页面请求
+	if (strstr(temp_path, "video_player.html") && query)
+	{
+		strcpy(path, "video/video_player.html"); // 视频模板页面的实际路径
+		strcpy(url_path, temp_path);
+		// 解析视频路径参数
+		query++; // 跳过 '?'
+		if (strncmp(query, "video=", 6) == 0)
+		{
+			char *video_param = query + 6;
+			url_decode(video_path, video_param); // 存储视频路径，供后续使用
+		}
+	}
+	else if (strcmp(temp_path, "/") == 0)
 	{
 		strcpy(path, ".");
 		strcpy(url_path, "/");
@@ -31,17 +50,17 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 		strcpy(path, decoded_path);				 // 本地访问路径
 		strcpy(url_path, temp_path);			 // 原始 URL 路径
 	}
-	// 简单防御路径穿越攻击
+	// 设置服务器根目录
+	char server_root[] = "./";
+	char server_real[1024];
+	realpath(server_root, server_real);
+	// 检查模板页面路径
 	char real_path[1024];
 	if (realpath(path, real_path) == NULL)
 	{
 		send_error(bev, protocol, 403, "Invalid path");
 		return;
 	}
-	// 设置服务器根目录
-	char server_root[] = "./";
-	char server_real[1024];
-	realpath(server_root, server_real);
 
 	size_t root_len = strlen(server_real);
 	if (strncmp(real_path, server_real, root_len) != 0 ||
@@ -49,6 +68,22 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 	{
 		send_error(bev, protocol, 403, "Forbidden");
 		return;
+	}
+	// 如果是视频请求，检查视频文件路径
+	if (video_path[0] != '\0')
+	{
+		char video_real_path[1024];
+		if (realpath(video_path, video_real_path) == NULL)
+		{
+			send_error(bev, protocol, 404, "Video file not found");
+			return;
+		}
+		// 检查视频文件是否在允许的目录内
+		if (strncmp(video_real_path, server_real, strlen(server_real)) != 0)
+		{
+			send_error(bev, protocol, 403, "Forbidden video path");
+			return;
+		}
 	}
 	// 解析 HTTP 请求头
 	http_request_t req;
@@ -97,7 +132,7 @@ void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct soc
 	struct sockaddr_in *client_addr = (struct sockaddr_in *)sa;
 	char ip[INET_ADDRSTRLEN];
 	inet_ntop(AF_INET, &client_addr->sin_addr, ip, sizeof(ip));
-	if (config.enable_connection_info!= 0)
+	if (config.enable_connection_info != 0)
 	{
 		printf("New connection from %s:%d\n", ip, ntohs(client_addr->sin_port));
 	}

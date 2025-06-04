@@ -12,7 +12,6 @@
             padding: 20px;
             background-color: #f5f5f5;
         }
-        
         .video-container {
             background: white;
             padding: 30px;
@@ -20,7 +19,6 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             text-align: center;
         }
-        
         video {
             width: 100%;
             max-width: 640px;
@@ -31,10 +29,29 @@
 </head>
 <body>
     <div class="video-container">
-        <video width="640" height="360" controls preload="metadata">
-            <source src="超燃亲热视频.mp4" type="video/mp4">
+        <video id="videoPlayer" controls preload="metadata">
             您的浏览器不支持视频播放。
         </video>
     </div>
+    <script>
+        // 获取视频路径参数
+        const params = new URLSearchParams(window.location.search);
+        const videoPath = params.get('video');
+        
+        if(videoPath) {
+            const videoPlayer = document.getElementById('videoPlayer');
+            const source = document.createElement('source');
+            // 使用完整的视频路径
+            source.src = '/' + videoPath;
+            source.type = 'video/mp4';
+            videoPlayer.appendChild(source);
+            // 设置页面标题
+            document.title = decodeURIComponent(videoPath.split('/').pop());
+            videoPlayer.load();
+        } else {
+            document.querySelector('.video-container').innerHTML = 
+                '<p>未指定视频文件</p>';
+        }
+    </script>
 </body>
 </html>

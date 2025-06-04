@@ -133,12 +133,9 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 		// 跳过当前目录和上级目录
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 			continue;
-		// 隐藏 mp4 文件
-        {
-            const char *ext = strrchr(entry->d_name, '.');
-            if (ext && strcasecmp(ext, ".mp4") == 0)
-                continue;
-        }
+		// 跳过video_player.html
+		if (strcmp(entry->d_name, "video_player.html") == 0)
+			continue;
 		// 生成完整主机路径，这里的 fs_path 应该是主机文件系统的路径
 		/*
 		待添加功能
@@ -157,7 +154,24 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 		struct tm *mt = localtime(&st.st_mtime);
 		strftime(modified_time, sizeof(modified_time), "%Y-%m-%d %H:%M:%S", mt);
 		// 生成 href 链接，这里的 url_path 应该是相对于服务器根目录的路径
-		snprintf(href, sizeof(href), "%s/%s", url_path, entry->d_name);
+		// 对于后缀为 .mp4 的文件，使用视频模板链接，其它文件则使用常规链接
+        const char *ext = strrchr(entry->d_name, '.');
+        if (ext && strcasecmp(ext, ".mp4") == 0)
+        {
+            // 使用完整的视频路径作为参数
+			char video_path[2048];
+			if (url_path[0] == '/')
+				snprintf(video_path, sizeof(video_path), "%s/%s", url_path + 1, entry->d_name);
+			else
+				snprintf(video_path, sizeof(video_path), "%s/%s", url_path, entry->d_name);
+			
+			// 生成视频播放页面链接
+			snprintf(href, sizeof(href), "/video_player.html?video=%s", video_path);
+        }
+        else
+        {
+            snprintf(href, sizeof(href), "%s/%s", url_path, entry->d_name);
+        }
 		// 规范化路径（去除重复 /）
 		int j = 0;
 		for (int i = 0; href[i] && j < sizeof(clean_href) - 1; ++i)
