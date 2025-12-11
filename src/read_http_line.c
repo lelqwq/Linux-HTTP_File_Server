@@ -1,5 +1,6 @@
 #include "read_http_line.h"
 
+// 读取HTTP数据
 int read_http_line(struct bufferevent *bev, char *buffer, size_t bufferSize)
 {
 	size_t buffer_pos = 0;

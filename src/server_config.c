@@ -2,6 +2,7 @@
 
 struct server_config config;
 
+// 加载配置文件
 void load_config(const char *config_file)
 {
     FILE *file = fopen(config_file, "r");

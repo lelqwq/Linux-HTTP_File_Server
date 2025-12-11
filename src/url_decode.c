@@ -1,5 +1,6 @@
 #include "url_decode.h"
 
+// URL解码函数
 void url_decode(char *dst, const char *src)
 {
 	while (*src)

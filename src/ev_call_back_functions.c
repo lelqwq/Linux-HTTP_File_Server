@@ -1,5 +1,6 @@
 #include "ev_call_back_functions.h"
 
+// 客户端可读事件处理
 void cb_read_browser(struct bufferevent *bev, void *arg)
 {
 	// get the first line of request
@@ -97,6 +98,7 @@ void cb_read_browser(struct bufferevent *bev, void *arg)
 	}
 }
 
+// 客户端断开事件处理
 void cb_client_close(struct bufferevent *bev, short events, void *arg)
 {
 	struct sockaddr_in *client_addr = (struct sockaddr_in *)arg;
@@ -125,6 +127,7 @@ void cb_client_close(struct bufferevent *bev, short events, void *arg)
 	atomic_fetch_sub(&stats.current_connections, 1);
 }
 
+// 客户端连接事件监听
 void cb_listener(struct evconnlistener *listener, evutil_socket_t fd, struct sockaddr *sa, int socklen, void *arg)
 {
 	struct event_base *evbase = (struct event_base *)arg;
