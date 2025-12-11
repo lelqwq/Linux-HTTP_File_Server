@@ -1,5 +1,6 @@
 #include "http_functions.h"
 
+// 发送HTTP报文头
 void send_head(struct bufferevent *bev, char *protocol, int code, char *description, char *content_type, int length, off_t start, off_t end, off_t total_size)
 {
 	struct evbuffer *output = bufferevent_get_output(bev);
@@ -30,6 +31,7 @@ void send_head(struct bufferevent *bev, char *protocol, int code, char *descript
 	evbuffer_add(output, "\r\n", 2);
 }
 
+// 发送range类型文件
 void send_file_range(struct bufferevent *bev, const char *path, off_t offset, size_t length, const char *protocol)
 {
 	int fd = open(path, O_RDONLY);
@@ -68,6 +70,7 @@ void send_file_range(struct bufferevent *bev, const char *path, off_t offset, si
 	atomic_fetch_add(&stats.total_bytes_sent, length);
 }
 
+// 发送目录
 void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path, char *protocol)
 {
 	DIR *dp = opendir(fs_path);
@@ -192,6 +195,7 @@ void send_dir(struct bufferevent *bev, const char *fs_path, const char *url_path
 	closedir(dp);
 }
 
+// 处理HTTP请求
 void http_request(char *method, const char *fs_path, const char *url_path, char *protocol, struct bufferevent *bev, http_request_t *req)
 {
 	if (strcasecmp(method, "GET") != 0)
@@ -261,6 +265,7 @@ void http_request(char *method, const char *fs_path, const char *url_path, char 
 	}
 }
 
+// 发送错误信息
 void send_error(struct bufferevent *bev, const char *protocol, int code, char *description)
 {
 	if (!bev)
@@ -291,6 +296,7 @@ void send_error(struct bufferevent *bev, const char *protocol, int code, char *d
 	evbuffer_add(output, html, html_len);
 }
 
+// 解析HTTP报文头
 void parse_http_headers(struct bufferevent *bev, http_request_t *req)
 {
 	req->header_count = 0;
@@ -328,6 +334,7 @@ void parse_http_headers(struct bufferevent *bev, http_request_t *req)
 	}
 }
 
+// 获取报文头的值
 const char *get_header_value(http_request_t *req, const char *key)
 {
 	for (int i = 0; i < req->header_count; i++)

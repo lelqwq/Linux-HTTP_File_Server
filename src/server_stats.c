@@ -5,6 +5,7 @@
 
 struct server_stats stats;
 
+// 初始化性能统计
 void init_server_stats(void)
 {
     atomic_init(&stats.current_connections, 0);
@@ -13,6 +14,7 @@ void init_server_stats(void)
     atomic_init(&stats.total_errors, 0);
 }
 
+// 打印服务器状态
 void print_server_stats(void)
 {
     // 如果未启用统计日志，直接返回

@@ -10,6 +10,7 @@
 struct event_base *evbase;
 struct evconnlistener *ev_listener;
 
+// 定时器回调函数，输出服务器状态
 void stats_timer_cb(evutil_socket_t fd, short what, void *arg)
 {
 	print_server_stats();
@@ -44,9 +45,10 @@ int main(int argc, char *argv[])
 		perror("chdir error");
 		return -1;
 	}
-	// sockaddr of server
+	// 服务器sockaddr
 	struct sockaddr_in server_addr;
-	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	// server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	server_addr.sin_addr.s_addr = INADDR_ANY; //如果报错就用上面那一行
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(config.port);
 	// 初始化event_base

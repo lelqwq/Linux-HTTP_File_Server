@@ -1,5 +1,6 @@
 #include "get_file_type.h"
 
+// 获取文件类型
 char *get_file_type(const char *filename)
 {
     char *dot = strrchr(filename, '.');
