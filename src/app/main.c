@@ -7,6 +7,9 @@
 #include "server_config.h"
 #include "server_stats.h"
 
+struct event_base *evbase;
+struct evconnlistener *ev_listener;
+
 // 定时器回调函数，输出服务器状态
 void stats_timer_cb(evutil_socket_t fd, short what, void *arg)
 {
