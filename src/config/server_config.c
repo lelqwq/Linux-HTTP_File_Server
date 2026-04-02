@@ -46,9 +46,9 @@ void load_config(const char *config_file)
             {
                 strncpy(config.log_file, value, sizeof(config.log_file) - 1);
             }
-            else if (strcmp(key, "stats_logging_interval") == 0)
+            else if (strcmp(key, "stats_timer") == 0)
             {
-                config.stats_logging_interval = atoi(value);
+                config.stats_timer = atoi(value);
             }
             else if (strcmp(key, "enable_connection_info") == 0)
             {

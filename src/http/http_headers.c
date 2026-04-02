@@ -9,7 +9,7 @@ void parse_http_headers(struct bufferevent *bev, http_request_t *req)
 	while (1)
 	{
 		char temp[1024] = {0};
-		int ret = http_read_line(bev, temp, sizeof(temp));
+		int ret = bufferevent_read_crlf_line(bev, temp, sizeof(temp));
 		if (ret == -1 || strcmp(temp, "\r\n") == 0 || strlen(temp) == 0)
 			break;
 		if (req->header_count < MAX_HEADERS)
