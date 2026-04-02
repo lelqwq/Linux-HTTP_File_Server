@@ -14,7 +14,7 @@ struct server_config
     int enable_directory_listing;   // 是否启用目录列表功能
     int enable_stats_logging;       // 是否启用统计日志
     char log_file[256];             // 日志文件路径
-    int stats_logging_interval;     // 统计日志记录间隔（秒）
+    int stats_timer;     // 统计日志记录间隔（秒）
     int enable_connection_info;     // 是否输出连接信息到控制台
 };
 

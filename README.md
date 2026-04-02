@@ -49,9 +49,9 @@ make clean    # 删除整个 obj/ 目录与 server.out
 | `max_connections` | 已写入配置结构体；**当前版本未在监听/接入逻辑中限流**，可视为预留项。 |
 | `timeout_seconds` | 客户端 `bufferevent` 读超时（秒），超时后触发超时事件并断开。 |
 | `enable_directory_listing` | 已解析；**当前版本未分支关闭目录列表**，访问目录时仍会生成索引页。 |
-| `enable_stats_logging` | 非 0 时，按 `stats_logging_interval` 间隔向 `log_file` **追加**统计快照。 |
+| `enable_stats_logging` | 非 0 时，按 `stats_timer` 间隔向 `log_file` **追加**统计快照。 |
 | `log_file` | 统计日志路径；若为相对路径，会基于启动时**项目根目录的当前工作目录**拼成绝对路径后再写入。 |
-| `stats_logging_interval` | 统计写入间隔（秒）。 |
+| `stats_timer` | 统计写入间隔（秒）。 |
 | `enable_connection_info` | 非 0 时在标准输出打印新连接、对端关闭、错误与超时等信息。 |
 
 修改 `root_dir` 后请确保该路径在目标机器上存在且可读。
