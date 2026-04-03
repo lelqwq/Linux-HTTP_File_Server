@@ -7,8 +7,8 @@
 #include <string.h>
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
-#include "server_config.h"
-#include "http_dispatch.h"
+#include "config/server_config.h"
+#include "http/http_dispatch.h"
 
 void cb_read_browser(struct bufferevent *bev, void *arg);
 void cb_client_close(struct bufferevent *bev, short events, void *arg);

@@ -1,5 +1,5 @@
-#include "http_headers.h"
-#include "http_line_reader.h"
+#include "http/http_headers.h"
+#include "http/http_line_reader.h"
 #include <string.h>
 #include <strings.h>
 

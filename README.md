@@ -65,8 +65,10 @@ make clean    # 删除整个 obj/ 目录与 server.out
 | `src/app/` | `main.c` | 程序入口：信号、配置加载、`event_base`、定时统计、`evconnlistener` |
 | `src/config/` | `server_config.c` | 解析 `server.conf` |
 | `src/event/` | `event_callbacks.c` | 仅 libevent 胶水：监听、连接、`bufferevent` 回调；读事件转交 `http_dispatch_on_read` |
-| `src/http/` | `http_dispatch.c` | 读请求行、URL→本地路径、视频参数、`realpath` 根目录校验、解析头后调用 `http_request` |
-| `src/http/` | `http_handler.c` | GET 资源处理：响应头、分段发送、目录 HTML、错误页 |
+| `src/http/` | `http_dispatch.c` | 读请求行、URL→本地路径、视频参数、`realpath` 根目录校验、解析头后调用 `http_handle_request` |
+| `src/http/` | `http_router.c` | HTTP 方法路由与 GET 资源分发（文件/目录） |
+| `src/http/` | `http_responder.c` | 响应头、错误页、文件分段发送 |
+| `src/http/` | `http_directory_renderer.c` | 目录 HTML 索引页渲染 |
 | `src/http/` | `http_headers.c` | 解析请求头、`get_header_value` |
 | `src/http/` | `http_range.c` | 解析 `Range: bytes=…` |
 | `src/http/` | `http_line_reader.c` | 从 `bufferevent` 按行读取 |

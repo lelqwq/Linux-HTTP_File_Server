@@ -1,10 +1,10 @@
 #include <errno.h>
 #include <stdio.h>
-#include "event_callbacks.h"
-#include "server_stats.h"
+#include "event/event_callbacks.h"
+#include "stats/server_stats.h"
 
 /*
- * cb_read_browser — bufferevent 读回调（有数据可读时由 libevent 调用）。
+ * cb_client_read — bufferevent 读回调（有数据可读时由 libevent 调用）。
  *
  * 功能：将连接交给 http_dispatch_on_read，完成请求行、路径校验、请求头解析与 GET 处理。
  *
@@ -14,7 +14,7 @@
  *
  * 返回值：无。
  */
-void cb_read_browser(struct bufferevent *p_bev, void *arg)
+void cb_client_read(struct bufferevent *p_bev, void *arg)
 {
 	(void)arg;
 	http_dispatch_on_read(p_bev);
@@ -101,7 +101,7 @@ void cb_listener(struct evconnlistener *p_evlistener, evutil_socket_t fd, struct
 	// 创建bufferevent，后续读写基于这个bufferevent进行
 	struct bufferevent *p_bev = bufferevent_socket_new(p_evbase, fd, BEV_OPT_CLOSE_ON_FREE);
 	// 设置bufferevent回调函数
-	bufferevent_setcb(p_bev, cb_read_browser, NULL, cb_client_close, (void *)p_client_addr_copy);
+	bufferevent_setcb(p_bev, cb_client_read, NULL, cb_client_close, (void *)p_client_addr_copy);
 	// 设置读超时时间
 	struct timeval tv_read_timeout = {config.timeout_seconds, 0};
 	bufferevent_set_timeouts(p_bev, &tv_read_timeout, NULL);

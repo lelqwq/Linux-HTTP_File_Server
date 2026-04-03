@@ -60,7 +60,7 @@ sequenceDiagram
     participant URL as url_decode
     participant PG as path_guard
     participant HH as http_headers
-    participant HR as http_handler
+    participant HR as http_router
     participant FS as 文件系统
 
     BE->>CB: 可读事件
@@ -76,11 +76,11 @@ sequenceDiagram
     PG-->>HD: 通过 / 403 / 404
     HD->>HH: parse_http_headers(bev)
     HH->>Line: bufferevent_read_crlf_line() 逐行读头
-    HD->>HR: http_request(GET, …)
+    HD->>HR: http_handle_request(GET, …)
     HR->>FS: stat(fs_path)
     FS-->>HR: 普通文件
     HR->>HR: get_header_value(Range)、http_parse_range_header
-    HR->>HR: send_head()、send_file_range()
+    HR->>HR: http_send_response_headers()、http_send_range_file()
     HR->>BE: evbuffer 写出响应
     Note over BE: Connection: close，随后连接关闭走 cb_client_close
 ```
@@ -108,4 +108,4 @@ sequenceDiagram
 ## 说明
 
 - **统计定时器**与请求处理在 **同一 `event_base`** 上异步交错执行，未单独画成交互，避免图形过于拥挤。
-- **目录列表**、**仅请求行失败**、**非 GET** 等分支与上图主路径类似，仅在 `http_dispatch` / `http_request` 内提前返回或走 `send_error`、`send_dir`。
+- **目录列表**、**仅请求行失败**、**非 GET** 等分支与上图主路径类似，仅在 `http_dispatch` / `http_handle_request` 内提前返回或走 `http_send_error_response`、`http_send_directory_listing`。

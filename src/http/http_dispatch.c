@@ -1,20 +1,21 @@
-#include "http_dispatch.h"
+#include "http/http_dispatch.h"
 #include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "http_line_reader.h"
-#include "http_headers.h"
-#include "http_handler.h"
-#include "path_guard.h"
-#include "url_decode.h"
-#include "server_stats.h"
+#include "http/http_line_reader.h"
+#include "http/http_headers.h"
+#include "http/http_router.h"
+#include "http/http_responder.h"
+#include "util/path_guard.h"
+#include "util/url_decode.h"
+#include "stats/server_stats.h"
 
 /*
  * http_dispatch_on_read — bufferevent 读回调（有数据可读时由 libevent 调用）。
  *
  * 功能：读取请求行、解析方法、路径、协议；处理查询串；调用 path_guard_resolve_under_root 校验路径；
- *       解析请求头并交给 http_request；累加请求数。
+ *       解析请求头并交给 http_handle_request；累加请求数。
  *
  * 参数：p_bev 对应该客户端连接的 bufferevent。
  *
@@ -35,7 +36,7 @@ void http_dispatch_on_read(struct bufferevent *p_bev)
 	char method[16], request_target[256], protocol[16];
 	sscanf(http_line, "%15s %255s %15s", method, request_target, protocol);
 
-	// 获取查询参数分隔符
+	// 定位查询参数分隔符指针
 	char *p_query_delim = strchr(request_target, '?');
 	if (p_query_delim != NULL)
 	{
@@ -75,37 +76,35 @@ void http_dispatch_on_read(struct bufferevent *p_bev)
 	char server_root_abs_path[PATH_MAX];
 	if (realpath(".", server_root_abs_path) == NULL)
 	{
-		send_error(p_bev, protocol, 403, "Invalid fs_path");
+		http_send_error_response(p_bev, protocol, 403, "Invalid fs_path");
 		return;
 	}
 	
-	// 解析路径，获取真实路径
-	char real_path[PATH_MAX];
-	ret = path_guard_resolve_under_root(fs_path, server_root_abs_path, real_path, sizeof(real_path));
+	// 检测是否存在路径穿越，防止请求路径穿越到其他目录
+	ret = path_guard_resolve_under_root(fs_path, server_root_abs_path);
 	if (ret == -1)
 	{
-		send_error(p_bev, protocol, 403, "Invalid fs_path");
+		http_send_error_response(p_bev, protocol, 403, "Invalid fs_path");
 		return;
 	}
 	if (ret == -2)
 	{
-		send_error(p_bev, protocol, 403, "Forbidden");
+		http_send_error_response(p_bev, protocol, 403, "Forbidden");
 		return;
 	}
 
 	// 处理视频播放页面
 	if (video_fs_path[0] != '\0')
 	{
-		char video_real_path[PATH_MAX];
-		ret = path_guard_resolve_under_root(video_fs_path, server_root_abs_path, video_real_path, sizeof(video_real_path));
+		ret = path_guard_resolve_under_root(video_fs_path, server_root_abs_path);
 		if (ret == -1)
 		{
-			send_error(p_bev, protocol, 404, "Video file not found");
+			http_send_error_response(p_bev, protocol, 404, "Video file not found");
 			return;
 		}
 		if (ret == -2)
 		{
-			send_error(p_bev, protocol, 403, "Forbidden video fs_path");
+			http_send_error_response(p_bev, protocol, 403, "Forbidden");
 			return;
 		}
 	}
@@ -115,6 +114,6 @@ void http_dispatch_on_read(struct bufferevent *p_bev)
 	if (strcmp(method, "GET") == 0)
 	{
 		atomic_fetch_add(&stats.total_requests, 1);
-		http_request(method, fs_path, url_path, protocol, p_bev, &req);
+		http_handle_request(method, fs_path, url_path, protocol, p_bev, &req);
 	}
 }
