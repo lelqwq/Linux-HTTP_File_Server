@@ -3,9 +3,9 @@
 #include <arpa/inet.h>
 #include <linux/limits.h>
 #include <signal.h>
-#include "event_callbacks.h"
-#include "server_config.h"
-#include "server_stats.h"
+#include "event/event_callbacks.h"
+#include "config/server_config.h"
+#include "stats/server_stats.h"
 
 // 定时器回调函数，输出服务器状态
 void stats_timer_cb(evutil_socket_t fd, short what, void *arg)

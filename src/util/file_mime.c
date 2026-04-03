@@ -1,4 +1,4 @@
-#include "file_mime.h"
+#include "util/file_mime.h"
 
 char *file_mime_lookup(const char *filename)
 {

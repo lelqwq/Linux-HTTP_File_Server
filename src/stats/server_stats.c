@@ -1,5 +1,5 @@
-#include "server_stats.h"
-#include "server_config.h"
+#include "stats/server_stats.h"
+#include "config/server_config.h"
 #include <time.h>
 #include <stdio.h>
 

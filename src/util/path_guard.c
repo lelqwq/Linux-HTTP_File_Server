@@ -1,15 +1,23 @@
-#include "path_guard.h"
+#include "util/path_guard.h"
 #include <stdlib.h>
 #include <string.h>
+#include <linux/limits.h>
 
-int path_guard_resolve_under_root(const char *logical_path, const char *root_real, char *real_out, size_t out_len)
+/*
+ * 将 fs_path 经 realpath 解析后，校验是否落在 server_root_abs_path 目录下（前缀 + 边界）。
+ * 返回 0 成功；-1 realpath 解析失败；-2 路径越出根目录。
+ */
+int path_guard_resolve_under_root(const char *fs_path, const char *server_root_abs_path)
 {
-	(void)out_len;
-	if (realpath(logical_path, real_out) == NULL)
+	char real_path[PATH_MAX];
+	if (realpath(fs_path, real_path) == NULL)
+	{
 		return -1;
-	size_t root_len = strlen(root_real);
-	if (strncmp(real_out, root_real, root_len) != 0 ||
-		(real_out[root_len] != '/' && real_out[root_len] != '\0'))
+	}
+	size_t root_len = strlen(server_root_abs_path);
+	if (strncmp(real_path, server_root_abs_path, root_len) != 0 || (real_path[root_len] != '/' && real_path[root_len] != '\0'))
+	{
 		return -2;
+	}
 	return 0;
 }
